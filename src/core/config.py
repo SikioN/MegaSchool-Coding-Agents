@@ -15,6 +15,9 @@ class Config:
     
     # Специфично для YandexGPT
     YC_FOLDER_ID = os.getenv("YC_FOLDER_ID")
+    
+    # Ограничения
+    MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "5"))
 
     @classmethod
     def validate(cls):

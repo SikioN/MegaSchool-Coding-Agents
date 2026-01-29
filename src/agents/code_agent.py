@@ -47,14 +47,23 @@ class CodeAgent:
 
     def run_fix(self, pr_url: str, issue_url: str):
         """
-        Запускает процесс исправления по замечаниям (Fix Flow).
+        Запускает цикл исправления на основе ревью.
         """
         print(f"Code Agent запущен в режиме FIX для PR: {pr_url}")
         
-        # 1. Checkout ветки PR
+        # 1. Проверка лимита итераций
+        comments = self.git.get_pr_comments(pr_url)
+        request_changes_count = comments.count("[REQUEST_CHANGES]")
+        
+        if request_changes_count >= Config.MAX_ITERATIONS:
+             print(f"CRITICAL: Достигнут лимит итераций ({Config.MAX_ITERATIONS}). Остановка.")
+             self.git.post_comment(pr_url, f"❌ Code Agent остановил работу: превышен лимит итераций ({Config.MAX_ITERATIONS}). Требуется вмешательство человека.")
+             return
+
+        # 2. Checkout ветки PR
         self.git.checkout_pr(pr_url)
         
-        # 2. Сбор информации
+        # 3. Сбор информации
         issue_content = self.git.get_issue(issue_url)
         pr_comments = self.git.get_pr_comments(pr_url)
         pr_diff = self.git.get_pr_diff(pr_url)

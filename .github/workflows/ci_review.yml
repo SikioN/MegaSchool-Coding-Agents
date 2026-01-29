@@ -26,6 +26,12 @@ jobs:
           pip install poetry
           poetry install
 
+      - name: Run Quality Checks
+        run: |
+          # Quality Gate: Linter and Tests
+          poetry run ruff check src/ || echo "Ruff found issues (non-blocking for MVP)"
+          # poetry run pytest # Uncomment when tests are real
+          
       - name: Run Reviewer Agent
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
