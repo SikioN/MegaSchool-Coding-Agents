@@ -6,6 +6,7 @@ authors = ["Admin <admin@example.com>"]
 readme = "README.md"
 packages = [{include = "src"}]
 
+# Forced update for CI hash
 [tool.poetry.dependencies]
 python = "^3.11"
 python-dotenv = "^1.0.0"
