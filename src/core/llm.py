@@ -99,10 +99,18 @@ class YandexGPTLLM(LLMProvider):
 def get_llm() -> LLMProvider:
     """
     Фабричная функция для получения экземпляра LLM провайдера.
-    Выбирает YandexGPT, если URL или Folder ID указывают на Яндекс, иначе использует OpenAI.
     """
-    if "api.cloud.yandex" in Config.LLM_BASE_URL or Config.YC_FOLDER_ID:
-         if "yandex" in Config.LLM_MODEL.lower() or Config.YC_FOLDER_ID:
-             return YandexGPTLLM()
+    # 1. Check for YandexGPT
+    if Config.YC_FOLDER_ID or "api.cloud.yandex" in Config.LLM_BASE_URL:
+        return YandexGPTLLM()
     
-    return OpenAILLM()
+    # 2. Check for OpenAI
+    if Config.OPENAI_API_KEY:
+        # Only try to instantiate if key is present
+        return OpenAILLM()
+        
+    # 3. No config found
+    raise ValueError(
+        "CRITICAL ERROR: No LLM configuration found!\n"
+        "Please set env vars/secrets: 'YC_FOLDER_ID' (for Yandex) or 'OPENAI_API_KEY' (for OpenAI)."
+    )
