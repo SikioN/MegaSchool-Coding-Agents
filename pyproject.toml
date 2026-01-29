@@ -17,13 +17,9 @@ PyGithub = "^2.1.1"
 pytest = "^7.4.0"
 ruff = "^0.1.0"
 bandit = "^1.7.5"
-black = "^23.9.0"
-mypy = "^1.5.0"
-tenacity = "^8.0"
-python-dotenv = "^1.0"
-
-mypy = "^1.8"
 black = "^24.0"
+mypy = "^1.8"
+tenacity = "^8.0"
 
 [build-system]
 requires = ["poetry-core"]
