@@ -1,6 +1,7 @@
 import os
 import time
 from src.core.llm import get_llm
+from src.core.config import Config
 from src.core.git_provider import GitProvider
 from src.core.utils import parse_code_blocks, apply_file_changes
 

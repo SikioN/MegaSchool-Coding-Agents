@@ -1,14 +1,19 @@
 def fib(n: int) -> int:
     """
-    Возвращает n-ое число Фибоначчи.
+    Returns the n-th Fibonacci number.
 
     Args:
-        n (int): Номер числа Фибоначчи.
+        n (int): The index of the Fibonacci number.
 
     Returns:
-        int: n-ое число Фибоначчи.
+        int: The n-th Fibonacci number.
+    
+    Raises:
+        ValueError: If n is negative.
     """
-    if n <= 0:
+    if n < 0:
+        raise ValueError("n must be non-negative")
+    elif n == 0:
         return 0
     elif n == 1:
         return 1
