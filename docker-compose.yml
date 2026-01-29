@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  code-agent:
+    build: .
+    volumes:
+      - .:/app
+    environment:
+      - OPENAI_API_KEY=${LLM_API_KEY}
+      - GITHUB_TOKEN=${GH_TOKEN}
+    command: tail -f /dev/null  # Keep alive for CLI usage

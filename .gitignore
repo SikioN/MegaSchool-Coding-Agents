@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Environment Variables & Secrets (CRITICAL)
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets.yaml
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store
+
+# Testing
+.pytest_cache/
+htmlcov/
+test_repo/
+test-agent-playground/
+
+# Project specific
+task1.txt
+extra.txt
+prompt.txt
+create_repo_script.py
+create_test_issue.py
+post_comment.py

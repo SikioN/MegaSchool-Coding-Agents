@@ -1,0 +1,64 @@
+name: Code Agent - Fix PR
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  fix-pr:
+    if: ${{ github.event.issue.pull_request && contains(github.event.comment.body, '/fix') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          pip install poetry
+          poetry install
+
+      - name: Run Code Agent Fix
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+        run: |
+          PR_URL="${{ github.event.issue.pull_request.html_url }}"
+          ISSUE_URL="${{ github.event.issue.html_url }}" # For PRs, this is often the PR itself in API, but we need the linked issue.
+          
+          # We need to find the ORIGINAL issue. 
+          # CodeAgent needs the original requirements. 
+          # Strategy: We can look at the PR body via API or assume the user passes it?
+          # Automated approach: Extract "Closes #123" from the PR body (requires fetching PR details).
+          # Since we are in a shell script, let's fetch PR body using gh cli or python.
+          # Easier: Let the python script find the linked issue if we pass just the PR?
+          # Current CodeAgent fix mode: run_fix(pr, issue).
+          # Let's try to extract it here using gh cli (preinstalled on runners).
+          
+          echo "Extracting linked issue from PR..."
+          gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
+          PR_BODY=$(gh pr view "$PR_URL" --json body -q .body)
+          ISSUE_NUMBER=$(echo "$PR_BODY" | grep -o 'Closes #[0-9]*' | grep -o '[0-9]*' | head -n 1)
+          
+          if [ -z "$ISSUE_NUMBER" ]; then
+             echo "::error::Could not find linked issue (Closes #ID) in PR body."
+             exit 1
+          fi
+          
+          REPO_URL="https://github.com/${{ github.repository }}"
+          LINKED_ISSUE_URL="$REPO_URL/issues/$ISSUE_NUMBER"
+          
+          echo "Triggering Fix for PR: $PR_URL based on Issue: $LINKED_ISSUE_URL"
+          poetry run python -m src.main fix --pr "$PR_URL" --issue "$LINKED_ISSUE_URL"

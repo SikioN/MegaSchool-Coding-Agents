@@ -1,0 +1,56 @@
+name: AI Reviewer
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          pip install poetry
+          poetry install
+
+      - name: Run Reviewer Agent
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+        run: |
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_BODY="${{ github.event.pull_request.body }}"
+          
+          # Try to extract issue number from "Closes #123"
+          ISSUE_NUMBER=$(echo "$PR_BODY" | grep -o 'Closes #[0-9]*' | grep -o '[0-9]*' | head -n 1)
+          
+          if [ -z "$ISSUE_NUMBER" ]; then
+            echo "Warning: Could not find linked issue in PR body. Using placeholder or trying to guess."
+            # Fallback strategy? Or just fail? Let's assume repo/issues/1 for safety if testing, or just fail.
+            # For now, let's try to parse from branch name if it has issue-id (our branch name format is just timestamp though)
+            # Failsafe:
+            echo "::error::No linked issue found. Please add 'Closes #<issue_id>' to description."
+            exit 1
+          fi
+          
+          REPO_URL="https://github.com/${{ github.repository }}"
+          ISSUE_URL="$REPO_URL/issues/$ISSUE_NUMBER"
+          
+          echo "Reviewing PR: $PR_URL against Issue: $ISSUE_URL"
+          poetry run python -m src.main review --pr "$PR_URL" --issue "$ISSUE_URL"
