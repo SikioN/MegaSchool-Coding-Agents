@@ -1,26 +1,18 @@
 from abc import ABC, abstractmethod
 from typing import Optional
-import openai
 import requests
 from src.core.config import Config
-
-class LLMProvider(ABC):
-    """
-    Абстрактный базовый класс для провайдеров LLM.
-    Определяет единый интерфейс взаимодействия с различными языковыми моделями.
-    """
-    @abstractmethod
-    def generate(self, system_prompt: str, user_prompt: str) -> str:
-        """
-        Генерирует текстовый ответ на основе системного и пользовательского промптов.
-        """
-        pass
 
 class OpenAILLM(LLMProvider):
     """
     Реализация провайдера для работы с OpenAI API.
     """
     def __init__(self):
+        try:
+            import openai
+        except ImportError:
+            raise ImportError("Модуль 'openai' не установлен. Пожалуйста, добавьте его через 'poetry add openai' или используйте YandexGPT.")
+            
         self.client = openai.OpenAI(
             api_key=Config.OPENAI_API_KEY,
             base_url=Config.LLM_BASE_URL
