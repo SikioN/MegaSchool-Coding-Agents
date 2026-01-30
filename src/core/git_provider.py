@@ -133,6 +133,23 @@ class GitProvider:
         issue.create_comment(body)
         print(f"Comment posted to {pr_url}")
 
+    def remove_label(self, issue_url: str, label_name: str):
+        """
+        Удаляет лейбл с Issue.
+        """
+        if not self.gh:
+             print(f"Mock Remove Label {label_name} from {issue_url}")
+             return
+
+        repo_name, number = self._parse_issue_url(issue_url)
+        repo = self.gh.get_repo(repo_name)
+        issue = repo.get_issue(number)
+        try:
+            issue.remove_from_labels(label_name)
+            print(f"Label '{label_name}' removed from {issue_url}")
+        except Exception as e:
+            print(f"Error removing label: {e}")
+
     def get_pr_comments(self, pr_url: str) -> str:
         """
         Получает список комментариев к PR.

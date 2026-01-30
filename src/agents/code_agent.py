@@ -36,6 +36,9 @@ class CodeAgent:
             )
             self.git.post_comment(issue_url, rejection_comment)
             
+            # Remove Label
+            self.git.remove_label(issue_url, "ready-to-code")
+            
             # Log failure to DB
             from src.core.db import log_event
             repo_name = self.git._get_repo_name_from_remote() or "unknown"
@@ -76,7 +79,7 @@ class CodeAgent:
         
         # 1. Heuristic: Length Check
         if len(body) < 30:
-            return False, "Description is too short (< 30 chars). Please provide more details."
+            return False, "Insufficient description. Please provide more details."
             
         # 2. Heuristic: Keyword Check
         keywords = ["create", "add", "implement", "fix", "update", "refactor", "change", "delete", "remove"]
