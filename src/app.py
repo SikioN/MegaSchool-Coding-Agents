@@ -4,11 +4,35 @@ import tempfile
 import asyncio
 import subprocess
 from fastapi import FastAPI, Request, BackgroundTasks, HTTPException, Depends
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 from src.core.config import Config
 from src.core.github_app_auth import GitHubAppAuth
 from src.core.webhook_handler import WebhookVerificator
+from src.core.db import init_db, log_event, get_recent_events
 
-app = FastAPI()
+app = FastAPI(title="MegaSchool Coding Agent")
+templates = Jinja2Templates(directory="src/templates")
+
+@app.on_event("startup")
+def startup_event():
+    init_db()
+
+# ---------------------------------------------------------------------
+# Dashboard Routes
+# ---------------------------------------------------------------------
+
+@app.get("/", response_class=HTMLResponse)
+async def read_dashboard(request: Request):
+    return templates.TemplateResponse("dashboard.html", {"request": request})
+
+@app.get("/api/events")
+async def read_events():
+    return get_recent_events()
+
+# ---------------------------------------------------------------------
+# Webhook Handler
+# ---------------------------------------------------------------------
 
 @app.post("/webhook")
 async def handle_webhook(
@@ -20,35 +44,38 @@ async def handle_webhook(
     payload = await request.json()
     
     print(f"Received event: {event_type}")
+    repo_name = payload.get("repository", {}).get("full_name", "unknown")
     
+    # 1. Log Event to DB
+    log_details = {"action": payload.get("action"), "hook_id": payload.get("hook_id")}
+    
+    if event_type == "issues":
+        log_details["title"] = payload.get("issue", {}).get("title")
+        log_details["url"] = payload.get("issue", {}).get("html_url")
+    elif event_type == "pull_request":
+        log_details["title"] = payload.get("pull_request", {}).get("title")
+        log_details["url"] = payload.get("pull_request", {}).get("html_url")
+    
+    log_event(event_type, repo_name, log_details)
+
+    # 2. Process Event
     if event_type == "ping":
-        print(f"✅ PONG! Webhook received successfully. Hook ID: {payload.get('hook_id')}")
         return {"status": "pong"}
     
     if event_type == "issues" and payload.get("action") == "labeled":
-        # Handle Code Agent trigger
-        label_name = payload["issue"]["labels"][-1]["name"] if payload["issue"]["labels"] else ""
-        # Check if the triggered label is 'ready-to-code'
-        # Note: Payload might contain just the label that triggered it in 'label' field?
-        # Actually payload['label'] exists for 'labeled' action.
         triggered_label = payload.get("label", {}).get("name")
-        
         if triggered_label == "ready-to-code":
              background_tasks.add_task(run_code_agent, payload)
         return {"status": "processing_issue"}
 
     elif event_type == "issue_comment" and payload.get("action") == "created":
-        # Handle /fix command (Code Agent Fix Mode)
         comment_body = payload["comment"]["body"]
         if "/fix" in comment_body:
-             # Check if it's a PR or Issue
-             # issue_comment event is sent for both. If payload['issue'] has 'pull_request' key, it is a PR.
              if "pull_request" in payload["issue"]:
                   background_tasks.add_task(run_fix_agent, payload)
         return {"status": "processing_comment"}
 
     elif event_type == "pull_request" and payload.get("action") in ["opened", "synchronize"]:
-        # Handle Reviewer Agent
         background_tasks.add_task(run_reviewer_agent, payload)
         return {"status": "processing_pr"}
 
@@ -81,20 +108,17 @@ def _run_in_temp_repo(repo_full_name: str, env: dict, command: list):
         print(f"Cloning {repo_full_name} to {temp_dir}...")
         try:
             subprocess.run(["git", "clone", clone_url, temp_dir], check=True, capture_output=True)
+            # Configure user for commits
+            subprocess.run(["git", "config", "user.email", "agent@megaschool.ai"], cwd=temp_dir, check=True)
+            subprocess.run(["git", "config", "user.name", "MegaSchool Agent"], cwd=temp_dir, check=True)
         except subprocess.CalledProcessError as e:
             print(f"Failed to clone: {e.stderr}")
             return
 
         print(f"Running command: {' '.join(command)}")
         try:
-            # We assume python is in path. 'poetry run' might be needed if env not active,
-            # but in Docker/dev env we are usually inside poetry shell or similar.
-            # Using 'python' invokes the current python interpreter if on same env.
-            # Safe bet: sys.executable
             import sys
-            
-            # Adjust command to use current python
-            full_command = [sys.executable, "-m"] + command[2:] # expecting ["python", "-m", ...]
+            full_command = [sys.executable, "-m"] + command[2:] 
             
             result = subprocess.run(
                 full_command, 
@@ -118,44 +142,26 @@ def run_code_agent(payload: dict):
     
     env = _get_env_with_token(installation_id)
     command = ["python", "-m", "src.main", "code", "--issue", issue_url]
-    
     _run_in_temp_repo(repo_name, env, command)
 
 def run_fix_agent(payload: dict):
     installation_id = payload["installation"]["id"]
     repo_name = payload["repository"]["full_name"]
-    pr_url = payload["issue"]["pull_request"]["html_url"] # In issue_comment, pr url is here
-    issue_url = payload["issue"]["html_url"] # This links to PR issue, we might need linked issue?
-    # CLI accepts --pr and --issue. CodeAgent fix logic tries to extract linked issue or uses passed issue.
-    # For now (MVP), pass the PR url as issue url if linked issue not trivial? 
-    # Actually src.main fix accepts --pr and --issue.
-    # We pass PR URL. Linked issue finding is internal to CodeAgent fix?
-    # Let's verify src.main arguments for fix.
+    pr_url = payload["issue"]["pull_request"]["html_url"]
+    issue_url = payload["issue"]["html_url"]
     
     env = _get_env_with_token(installation_id)
-    # Note: CodeAgent fix logic needs LINKED issue to know what to solve. 
-    # Current CLI usage: python -m src.main fix --pr <pr> --issue <issue>
-    # If we don't know the issue, we can pass PR url as issue and hope agent handles it 
-    # or extraction logic in App is needed.
-    # For MVP simplicity: Pass PR URL, assuming CodeAgent can handle it or we updated CodeAgent?
-    # We updated CodeAgent to run_fix(pr, issue).
-    # ci_fix.yml tries to extract it. Here we might skip extraction for now or assume user pasted it?
-    # Let's just pass PR URL for both and see if it survives.
-    
     command = ["python", "-m", "src.main", "fix", "--pr", pr_url, "--issue", issue_url]
-    
     _run_in_temp_repo(repo_name, env, command)
 
 def run_reviewer_agent(payload: dict):
     installation_id = payload["installation"]["id"]
     repo_name = payload["repository"]["full_name"]
     pr_url = payload["pull_request"]["html_url"]
-    # Issue URL? PR is an issue.
     issue_url = pr_url 
     
     env = _get_env_with_token(installation_id)
     command = ["python", "-m", "src.main", "review", "--pr", pr_url, "--issue", issue_url]
-    
     _run_in_temp_repo(repo_name, env, command)
 
 if __name__ == "__main__":
