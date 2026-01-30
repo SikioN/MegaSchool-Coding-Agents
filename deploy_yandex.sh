@@ -13,7 +13,8 @@ if [ -z "$REGISTRY_ID" ]; then
   exit 1
 fi
 
-IMAGE_URI="cr.yandex/$REGISTRY_ID/$SERVICE_NAME:latest"
+TAG=$(date +%s)
+IMAGE_URI="cr.yandex/$REGISTRY_ID/$SERVICE_NAME:$TAG"
 
 echo "🚀 Starting Deployment to Yandex Cloud Serverless..."
 
