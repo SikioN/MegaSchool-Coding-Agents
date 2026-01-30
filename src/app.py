@@ -33,6 +33,29 @@ async def read_events(repo: str = None):
     return get_recent_events(repo_name=repo)
 
 # ---------------------------------------------------------------------
+# Remote Logging Endpoint
+# ---------------------------------------------------------------------
+from pydantic import BaseModel
+from typing import Dict, Any
+
+class LogEventRequest(BaseModel):
+    event_type: str
+    repo_name: str
+    details: Dict[str, Any]
+
+@app.post("/api/logs")
+async def receive_remote_log(log: LogEventRequest):
+    """
+    Эндпоинт для приема логов от Агента (GitHub Actions).
+    Пишет их в локальную базу Dashboard.
+    """
+    # Force local write (bypass remote check to avoid loops)
+    # We use a lower-level insertion or ensure DASHBOARD_API_URL is NOT set on Server
+    # Actually reusing log_event is fine if DASHBOARD_API_URL is unset in Cloud
+    log_event(log.event_type, log.repo_name, log.details)
+    return {"status": "ok"}
+
+# ---------------------------------------------------------------------
 # Webhook Handler
 # ---------------------------------------------------------------------
 

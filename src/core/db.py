@@ -23,7 +23,33 @@ def init_db():
     except Exception as e:
         print(f"DB Init Error: {e}")
 
+import os
+import requests
+
 def log_event(event_type: str, repo_name: str, details: Dict[str, Any]):
+    # 1. Remote Logging (for GitHub Actions)
+    dashboard_url = os.environ.get("DASHBOARD_API_URL") # e.g. https://func-url.../
+    
+    if dashboard_url:
+        try:
+            # Clean URL
+            if not dashboard_url.endswith("/"):
+                dashboard_url += "/"
+            
+            api_endpoint = dashboard_url + "api/logs"
+            
+            payload = {
+                "event_type": event_type,
+                "repo_name": repo_name,
+                "details": details
+            }
+            # Timeout is short to not block the agent
+            requests.post(api_endpoint, json=payload, timeout=2)
+        except Exception as e:
+            # Silent fail for remote logs, don't crash agent
+            print(f"Remote Log Warning: {e}")
+
+    # 2. Local Logging (Always log locally as backup/for Server mode)
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
