@@ -3,7 +3,7 @@ import time
 import json
 import sqlite3
 import requests
-import boto3
+# import boto3 (moved inside functions for safety)
 from typing import List, Dict, Any
 
 DB_PATH = "events.db"
@@ -13,6 +13,7 @@ S3_BUCKET = os.environ.get("S3_BUCKET_NAME")
 S3_ENDPOINT = "https://storage.yandexcloud.net"
 
 def _get_s3_client():
+    import boto3
     # Use IAM role if available (Serverless), or fallback to env vars (Local)
     return boto3.client(
         "s3",
