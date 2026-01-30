@@ -99,11 +99,16 @@ class CodeAgent:
 
     def _apply_and_push(self, llm_response: str, title: str, issue_url: str, is_fix: bool = False):
         """
-        Парсит ответ, применяет изменения, коммитит и пушит (создает PR если нужно).
+        Парсит ответ, примененияет изменения, коммитит и пушит (создает PR если нужно).
         """
+        from src.core.db import log_event
+        
         changes = parse_code_blocks(llm_response)
+        repo_name = self.git._get_repo_name_from_remote() or "unknown/repo"
+        
         if not changes:
             print("LLM не сгенерировала изменений.")
+            log_event("agent_error", repo_name, {"error": "LLM returned no code changes", "issue": issue_url})
             return
 
         # Если это новая задача, создаем ветку (если не fix mode, где мы уже на ветке)
@@ -124,6 +129,7 @@ class CodeAgent:
             # Просто пуш
             self.git.create_pr("Update", "Fixes", "main") # create_pr делает push
             print(f"Изменения отправлены в PR.")
+            log_event("agent_action", repo_name, {"action": "changes_pushed", "pr": issue_url}) # issue_url here is PR url in fix mode
         else:
             # 6. Коммит и создание PR
             self.git.commit_changes(f"Решение задачи {issue_url}")
@@ -136,6 +142,22 @@ class CodeAgent:
             )
             
             print(f"Code Agent завершил работу. PR создан: {pr_url}")
+            
+            # LOG SUCCESS TO DB (For Dashboard)
+            log_event("pull_request", repo_name, {
+                "action": "opened_by_agent", 
+                "title": title, 
+                "html_url": pr_url,
+                "issue_url": issue_url
+            })
+            
+            # COMMENT ON ISSUE
+            comment_body = (
+                f"🚀 **Task Completed!**\n\n"
+                f"I have created a Pull Request with the solution: {pr_url}\n\n"
+                f"Please review the changes."
+            )
+            self.git.post_comment(issue_url, comment_body)
 
     def _get_context(self) -> str:
         """
