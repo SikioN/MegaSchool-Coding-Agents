@@ -14,7 +14,7 @@
 *   **Homepage URL**: `https://github.com/SikioN/MegaSchool-Coding-Agents` (Можно указать ссылку на ваш репозиторий).
 *   **Callback URL** (User authorization callback URL): `https://github.com/SikioN/MegaSchool-Coding-Agents` (Пока не важно, оставьте ссылку на репо, галочку *Expire user authorization tokens* **не** ставьте).
 *   **Webhook URL**: `https://example.com/webhook` (Это **временная заглушка**. Позже мы поменяем её на адрес от `ngrok`).
-*   **Webhook Secret**: Придумайте сложный пароль (например, `mega_school_secret_2026`). **Запишите его!**
+*   **Webhook Secret**: Придумайте сложный пароль. **Запишите его!**
 
 ## Шаг 3: Права доступа (Permissions)
 Вам нужно развернуть вкладку **Permissions** и выдать права.
@@ -57,9 +57,13 @@
 
 ---
 
-## Итого: Что мне нужно от вас
-Пришлите мне 3 параметра (или добавьте их в `.env` сами):
+## Итого: Где сохранить ключи
+Добавьте полученные данные в файл `.env` в корне проекта (или в GitHub Secrets, если запускаете через Actions):
 
-1.  APP_ID
-2.  WEBHOOK_SECRET (тот, что вы придумали)
-3.  PRIVATE_KEY (содержимое файла .pem)
+```ini
+GITHUB_APP_ID=...
+GITHUB_WEBHOOK_SECRET=...
+GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----
+...ваши данные...
+-----END RSA PRIVATE KEY-----"
+```
