@@ -44,6 +44,12 @@ echo "👮 Granting puller role to Service Account..."
 FOLDER_ID=$(yc config get folder-id)
 yc resource-manager folder add-access-binding --id $FOLDER_ID --role container-registry.images.puller --subject serviceAccount:$SA_ID > /dev/null
 
+# Make container public (allow unauthenticated invoke)
+echo "🌍 Making container public..."
+if ! yc serverless container list-access-bindings --name $SERVICE_NAME | grep -q "system:allUsers"; then
+   yc serverless container add-access-binding --name $SERVICE_NAME --role serverless.containers.invoker --subject system:allUsers
+fi
+
 # Check if container exists, create if not
 if ! yc serverless container get $SERVICE_NAME > /dev/null 2>&1; then
   echo "🆕 Creating Serverless Container '$SERVICE_NAME'..."
