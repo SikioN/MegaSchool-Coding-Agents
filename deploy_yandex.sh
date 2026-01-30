@@ -19,8 +19,8 @@ IMAGE_URI="cr.yandex/$REGISTRY_ID/$SERVICE_NAME:$TAG"
 echo "🚀 Starting Deployment to Yandex Cloud Serverless..."
 
 # 1. Build Docker Image
-echo "🔨 Building Docker image (linux/amd64)..."
-docker build --platform linux/amd64 -t $IMAGE_URI .
+echo "🔨 Building Docker image (linux/amd64) with no cache..."
+docker build --platform linux/amd64 --no-cache -t $IMAGE_URI .
 
 # 2. Push to Registry
 echo "🔐 Logging in to Yandex Registry (isolated environment)..."
