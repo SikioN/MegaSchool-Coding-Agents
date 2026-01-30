@@ -8,8 +8,8 @@ from typing import List, Dict, Any
 
 DB_PATH = "events.db"
 
-# S3 Configuration
-S3_BUCKET = os.environ.get("S3_BUCKET_NAME")
+# S3 Configuration (TEMPORARILY DISABLED FOR DEBUG)
+S3_BUCKET = None # os.environ.get("S3_BUCKET_NAME")
 S3_ENDPOINT = "https://storage.yandexcloud.net"
 
 def _get_s3_client():
