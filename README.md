@@ -1,145 +1,160 @@
 # MegaSchool Coding Agents
 
-Добро пожаловать в проект **MegaSchool Coding Agents**. Это система автономных AI-разработчиков, к которой вы можете подключить свой репозиторий.
+Autonomous AI-powered development system that writes code, reviews PRs, and fixes bugs based on natural language descriptions.
 
-**Что умеет система:**
-1.  **Code Agent**: Пишет код по вашему описанию в Issue.
-2.  **Reviewer Agent**: Проверяет каждый Pull Request и ищет ошибки.
-3.  **Fixer Loop**: Исправляет код по вашим комментариям (команда `/fix`).
-4.  **Auto-Setup**: Автоматически определяет "чистые" репозитории и предлагает настроить окружение (linter, ci/cd).
-5.  **Interactive Refinement**: Если задача описана недостаточно подробно, агент отклонит ее. Вы можете дополнить задачу через комментарии (`/retry fix...`), и агент начнет работу, не требуя создания нового Issue.
-6.  **Smart Context (RAG/Tree)** 🧠: Агент не читает весь код подряд. Он строит "Карту проекта", выбирает только нужные файлы и работает даже с большими репозиториями (Mono-repo ready).
+## What It Does
 
-**Жизненный Цикл Задачи:**
-1.  **Issue**: Вы создаете задачу с лейблом `ready-to-code`.
-2.  **Валидация**: Агент проверяет описание.
-    *   *Если OK*: Начинает работу.
-    *   *Если Reject*: Снимает лейбл `ready-to-code` и пишет комментарий с причиной.
-3.  **Уточнение**: Вы добавляете комментарий с деталями (используйте команду `/retry` или верните лейбл вручную).
-4.  **PR**: Агент создает Pull Request с решением.
-5.  **Review**: Вы комментируете PR (команда `/fix`), агент исправляет.
+1. **Code Agent**: Writes code from Issue descriptions
+2. **Reviewer Agent**: Automatically reviews Pull Requests
+3. **Fixer Loop**: Iteratively fixes code based on feedback (`/fix` command)
+4. **Auto-Setup**: Detects empty repos and proposes linter/CI configuration
+5. **Interactive Refinement**: Rejects vague tasks and allows refinement via comments (`/retry`)
+6. **Smart Context (RAG)**: Builds a project map and selects only relevant files
 
-**Web Dashboard**: [Посмотреть статус агента в реальном времени](https://bbanv77fpp9clmjgi7r9.containers.yandexcloud.net/)  
-**[Смотрите результаты живого эксперимента (DEMO.md)](DEMO.md)**
+## Task Lifecycle
 
-## Метрики Производительности
+1. **Issue**: Create an issue with label `ready-to-code`
+2. **Validation**: Agent validates description quality
+   - If OK → starts work
+   - If rejected → removes label and explains why
+3. **Refinement**: Add details in comments (use `/retry` or re-add label)
+4. **PR**: Agent creates Pull Request with solution
+5. **Review**: Comment on PR with `/fix` to request changes
 
-Мы провели серию из **10 экспериментов** (алгоритмические задачи), чтобы оценить качество работы агента.
+## Web Dashboard
 
-| Метрика | Значение | Комментарий |
+Monitor agent activity in real-time: [Dashboard](https://bbanv77fpp9clmjgi7r9.containers.yandexcloud.net/)
+
+---
+
+## Demo Experiment: Rejection + Success Flow
+
+This experiment demonstrates the agent's validation mechanism and end-to-end workflow.
+
+### Step 1: Incorrect Request (Rejection)
+
+**Create Issue:**
+- **Title**: `Add feature`
+- **Body**: `Make it better`
+- **Label**: `ready-to-code`
+
+**Expected Result:**
+1. Agent validates the issue
+2. Rejects it with comment: *"Description is too vague. Please specify what feature to add and provide implementation details."*
+3. Removes `ready-to-code` label
+4. Dashboard shows: `Task Rejected`
+
+### Step 2: Correct Request (Success)
+
+**Add Comment to Same Issue:**
+```
+Create a new Python file `src/utils/logger.py` with a simple logging function:
+- Function name: setup_logger(name: str)
+- Should configure and return a logger instance
+- Use Python's built-in logging module
+- Set format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+```
+
+**Expected Result:**
+1. Agent re-validates (triggered by `/retry` comment or manual label addition)
+2. Validation passes
+3. Agent creates branch `fix-issue-<N>`
+4. Generates code for `src/utils/logger.py`
+5. Creates Pull Request with implementation
+6. Dashboard shows timeline:
+   - Started working on Issue
+   - Validation Passed
+   - Analyzing repository
+   - Applying changes to 1 files
+   - PR Created
+
+### Verification
+
+- **Branch**: Check that `fix-issue-<N>` branch exists
+- **PR**: Verify PR contains `src/utils/logger.py` with correct implementation
+- **Dashboard**: Timeline shows all agent steps with icons
+
+---
+
+## Performance Metrics
+
+10 algorithmic tasks tested (script: `experiments/benchmark.py`, model: gpt-4o-mini):
+
+| Metric | Value | Comment |
 | :--- | :--- | :--- |
-| **Success Rate** | **100%** | 10 из 10 задач решены корректно (код валиден). |
-| **Avg. Time** | **~7.2s** | Среднее время генерации решения (без учета CI/CD). |
-| **Iterations** | **1.0** | Все задачи решены с первой попытки (Zero-Shot). |
+| **Success Rate** | **100%** | 10/10 tasks solved correctly |
+| **Avg. Time** | **~7.2s** | Generation time (excluding CI/CD) |
+| **Iterations** | **1.0** | All tasks solved zero-shot |
 
-*Методология: Замеры проведены с помощью скрипта `experiments/benchmark.py` на модели gpt-4o-mini (через Proxy).*
+### Bug Fix Experiment
 
-## Эксперимент: Исправление багов (Bug Fix)
+**Scenario**: Calculator app with `ZeroDivisionError` when grade list is empty.
 
-Мы также протестировали способность агента работать с **существующим кодом** и исправлять ошибки, описанные пользователем.
+**Result**: Agent analyzed `main.py` and `calculator.py`, identified the bug, added empty list check. No other code modified.
 
-**Сценарий:**
-*   Создано мини-приложение "Калькулятор оценок" (в папке `experiments/bug_fix_app`).
-*   Внедрен баг: `ZeroDivisionError` при пустом списке оценок.
-*   Создан Issue: "Приложение падает, если у студента нет оценок. Исправь это".
-
-**Результат:**
-Агент проанализировал зависимые файлы (`main.py`, `calculator.py`), нашел ошибку в логике `calculator.py` и добавил проверку на пустой список. Остальной код остался нетронутым.
-*Подробный отчет:* `experiments/BUG_FIX_REPORT.md`
+*Full report*: `experiments/BUG_FIX_REPORT.md`
 
 ---
 
-## Как проверить работу (Демо)
+## Usage Options
 
-Вы можете сами убедиться, что агент работает:
-1.  Откройте **[Dashboard](https://bbanv77fpp9clmjgi7r9.containers.yandexcloud.net/)**.
-2.  Создайте Issue в этом репозитории с лейблом `ready-to-code`.
-3.  Следите за логами в Дашборде — вы увидите, как агент подхватит задачу!
+### Option 1: Use Our Hosted Agent (Quickest)
 
----
+1. Install GitHub App: [MegaSchool Agent](https://github.com/apps/megaschool-agent-sikion)
+2. Select repositories to grant access
+3. **IMPORTANT**: In repo `Settings` → `Actions` → `General` → `Workflow permissions`:
+   - Enable **"Allow GitHub Actions to create and approve pull requests"**
+4. Create Issue with label `ready-to-code`
 
-## Способы использования
+*Note: Runs on our demo server.*
 
-### 1. Подключение готового агента (Самый быстрый)
+### Option 2: Run in Your GitHub Actions (Your API Keys)
 
-Мы уже развернули и настроили агента. Вам не нужно ничего устанавливать.
+1. Fork this repository
+2. Add secrets in `Settings` → `Secrets and variables` → `Actions`:
+   - `LLM_API_KEY`: Your OpenAI/Yandex API key
+   - `YC_FOLDER_ID`: Yandex Cloud folder ID (if using YandexGPT)
+   - `DASHBOARD_API_URL`: Your dashboard URL (optional, for logs)
+3. Enable workflows in `Actions` tab
 
-1.  **Установите наше приложение**: [Ссылка на установку приложения](https://github.com/apps/megaschool-agent-sikion).
-2.  Выберите репозитории, к которым хотите дать доступ.
-3.  **ВАЖНО (!):** В настройках репозитория (`Settings` -> `Actions` -> `General` -> `Workflow permissions`) поставьте галочку **"Allow GitHub Actions to create and approve pull requests"**.
-    *   *Без этого GitHub запретит агенту создавать Pull Request, даже если у него есть права.*
-4.  Создайте Issue с лейблом `ready-to-code`. Агент приступит к работе!
+Agent runs in your fork using your keys.
 
-*(Примечание: В этом режиме агент работает на нашем демонстрационном сервере).*
+### Option 3: Self-Hosted Server with Webhooks (Advanced)
 
-### 2. Запуск у себя (Свои ключи / GitHub Actions)
+For full control over webhooks and server infrastructure:
 
-Если вы хотите использовать **свои API ключи** (OpenAI/Yandex) или опасаетесь за приватность данных, запустите агента в своем аккаунте через GitHub Actions.
+See [docs/github_app_setup.md](docs/github_app_setup.md) for GitHub App creation and configuration.
 
-1.  **Сделайте Fork** этого репозитория.
-2.  Перейдите в **Settings -> Secrets and variables -> Actions**.
-3.  Добавьте ваши ключи:
-    *   `LLM_API_KEY`: Ваш ключ (OpenAI/Yandex).
-    *   `YC_FOLDER_ID`: ID папки (если используете Яндекс).
-4.  Включите Actions во вкладке **Actions** (кнопка "I understand... enable workflows").
+### Option 4: Docker / Docker Compose
 
-Теперь агент будет работать внутри вашего форка, используя ваши ключи.
+**Docker:**
+```bash
+docker build -t megaschool-agent .
+docker run -d -p 8000:8080 --env-file .env --name my-agent megaschool-agent
+```
 
----
-
-## Развертывание "Своего" Сервера (Advanced)
-
-Если вы хотите поднять **собственную копию** сервера с Webhooks (как в варианте 1, но на вашем железе):
-
-Инструкция по созданию и настройке своего GitHub App находится в файле [docs/github_app_setup.md](docs/github_app_setup.md).
-Это позволит вам иметь полный контроль над приложением и вебхуками.
-
----
-
-### 3. Запуск через Docker (Контейнер)
-
-Если вы предпочитаете Docker, мы подготовили всё необходимое.
-
-1.  **Соберите образ**:
-    ```bash
-    docker build -t megaschool-agent .
-    ```
-
-2.  **Запустите контейнер**:
-    Нужно пробросить переменную `.env` или передать ключи напрямую.
-
-    ```bash
-    # Вариант с файлом .env (рекомендуется)
-    docker run -d -p 8000:8080 --env-file .env --name my-agent megaschool-agent
-    ```
-
-### 4. Запуск через Docker Compose
-
-Самый правильный способ (Infrastructure as Code). Убедитесь, что у вас есть файл `.env`.
-
+**Docker Compose** (recommended):
 ```bash
 docker-compose up -d --build
 ```
-Сервер запустится на порту 8000. Внесите изменения в код — сервер перезагрузится автоматически (volume bind mount).
 
-3.  Сервер доступен на `http://localhost:8000`. Настройте ваш туннель (ngrok) на этот порт.
-
----
-
-## Конфигурация (Своя LLM)
-
-Проект поддерживает любую LLM, совместимую с OpenAI API (включая YandexGPT через адаптер).
-Вы можете управлять моделью через переменные окружения (или GitHub Secrets):
-
-*   `LLM_BASE_URL`: Адрес API (например `https://api.openai.com/v1`).
-*   `LLM_MODEL`: Имя модели (например `gpt-4o`, `yandexgpt-lite`).
-*   `MAX_ITERATIONS`: Максимальное число попыток исправления ошибок (по умолчанию: 5).
+Server runs on `http://localhost:8000`. Use ngrok for webhooks.
 
 ---
 
-## Контакты
+## Configuration
 
-Автор: Муравья Никита Романович
+Supports any OpenAI-compatible LLM (including YandexGPT):
+
+- `LLM_BASE_URL`: API endpoint (default: `https://api.openai.com/v1`)
+- `LLM_MODEL`: Model name (e.g., `gpt-4o`, `yandexgpt-lite`)
+- `MAX_ITERATIONS`: Max fix attempts (default: 5)
+
+---
+
+## Contact
+
+Author: Nikita Muravya  
 Telegram: [t.me/nmuravya](https://t.me/nmuravya)
 
-*Проект разработан в рамках соревнования MegaSchool.*
+*Developed for MegaSchool Competition.*
