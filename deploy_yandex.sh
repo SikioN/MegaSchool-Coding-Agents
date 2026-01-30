@@ -75,7 +75,7 @@ yc serverless container revision deploy \
   --concurrency 1 \
   --execution-timeout 30s \
   --service-account-id $SA_ID \
-  --environment GITHUB_APP_ID="$GITHUB_APP_ID",GITHUB_WEBHOOK_SECRET="$GITHUB_WEBHOOK_SECRET",GITHUB_PRIVATE_KEY="$GITHUB_PRIVATE_KEY",LLM_API_KEY="$LLM_API_KEY",YC_FOLDER_ID="$YC_FOLDER_ID"
+  --environment GITHUB_APP_ID="$GITHUB_APP_ID",GITHUB_WEBHOOK_SECRET="$GITHUB_WEBHOOK_SECRET",GITHUB_PRIVATE_KEY="$GITHUB_PRIVATE_KEY",LLM_API_KEY="$LLM_API_KEY",YC_FOLDER_ID="$YC_FOLDER_ID",DASHBOARD_API_URL="$DASHBOARD_API_URL"
 
 echo "✅ Deployment Complete!"
 echo "   Go to Yandex Console -> Serverless Containers to get your new URL."
