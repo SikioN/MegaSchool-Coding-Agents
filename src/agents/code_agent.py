@@ -204,7 +204,7 @@ class CodeAgent:
             self._log_step(f"Created branch `{branch_name}`", icon="🌿")
         
         # LOGGING FILE CHANGES
-        file_list = [c['file'] for c in changes]
+        file_list = [c.get('path', c.get('file', 'unknown')) for c in changes]
         self._log_step(f"Applying changes to {len(file_list)} files: {', '.join(file_list)}", icon="📝")
         
         apply_file_changes(changes)

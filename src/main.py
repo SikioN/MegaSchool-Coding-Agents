@@ -28,6 +28,14 @@ def main():
 
     args = parser.parse_args()
 
+    # Инициализация БД (для локальных логов, даже если они не идут в Cloud Dashboard)
+    # Это предотвращает ошибки "no such table: events"
+    try:
+        from src.core.db import init_db
+        init_db()
+    except Exception as e:
+        print(f"Warning: Failed to init DB: {e}")
+
     # Валидация конфигурации при запуске
     Config.validate()
 
