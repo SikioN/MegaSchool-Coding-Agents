@@ -60,37 +60,53 @@ async def handle_webhook(
     
     log_event(event_type, repo_name, log_details)
 
+    import threading
+    
     # 2. Process Event
     if event_type == "ping":
         return {"status": "pong"}
     
     if event_type == "issues" and payload.get("action") == "labeled":
         triggered_label = payload.get("label", {}).get("name")
+        print(f"DEBUG: Issues labeled. Label: '{triggered_label}'")
+        
         if triggered_label == "ready-to-code":
-             background_tasks.add_task(run_code_agent, payload)
-        return {"status": "processing_issue"}
+             # Use Threading instead of BackgroundTasks for Serverless reliability in this demo
+             print("DEBUG: Starting Code Agent thread...")
+             thread = threading.Thread(target=run_code_agent, args=(payload,))
+             thread.start()
+             return {"status": "started_code_agent"}
+        else:
+             print(f"DEBUG: Label '{triggered_label}' ignored.")
+             return {"status": "ignored_label"}
 
     elif event_type == "issue_comment" and payload.get("action") == "created":
         comment_body = payload["comment"]["body"]
+        print(f"DEBUG: Comment created. Body: {comment_body}")
         if "/fix" in comment_body:
-             if "pull_request" in payload["issue"]:
-                  background_tasks.add_task(run_fix_agent, payload)
-        return {"status": "processing_comment"}
+             if "pull_request" in payload["issue"]: # PR comments are issue comments too
+                  thread = threading.Thread(target=run_fix_agent, args=(payload,))
+                  thread.start()
+                  return {"status": "started_fix_agent"}
+        return {"status": "ignored_comment"}
 
     elif event_type == "installation" and payload.get("action") == "created":
-        # Handle new installation -> Scan Repos
         installation_id = payload["installation"]["id"]
         repositories = payload.get("repositories", [])
+        print(f"DEBUG: Installation created. Repos: {len(repositories)}")
         
         if repositories:
-             background_tasks.add_task(run_auto_setup, installation_id, repositories)
+             thread = threading.Thread(target=run_auto_setup, args=(installation_id, repositories))
+             thread.start()
         return {"status": "scanning_repos"}
 
     elif event_type == "pull_request" and payload.get("action") in ["opened", "synchronize"]:
-        background_tasks.add_task(run_reviewer_agent, payload)
+        print(f"DEBUG: PR event {payload.get('action')}")
+        thread = threading.Thread(target=run_reviewer_agent, args=(payload,))
+        thread.start()
         return {"status": "processing_pr"}
 
-    return {"status": "ignored"}
+    return {"status": "ignored_type"}
 
 # ---------------------------------------------------------------------
 # Agent Runners (Payload Wrappers)
