@@ -22,4 +22,5 @@ COPY . .
 # Install project
 RUN poetry install --no-interaction --no-ansi
 
-CMD ["python", "-m", "src.main"]
+EXPOSE 8000
+CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8000"]
