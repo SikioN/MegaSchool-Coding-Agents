@@ -213,24 +213,68 @@
 
                 container.innerHTML = '';
                 activeEvents.forEach(event => {
-                    const date = new Date(event.timestamp * 1000).toLocaleString();
-                    const details = JSON.stringify(event.details, null, 2);
+                    const date = new Date(event.timestamp * 1000).toLocaleTimeString();
+                    const detailsJson = JSON.stringify(event.details, null, 2);
 
                     const card = document.createElement('div');
                     card.className = 'event-card';
-                    card.innerHTML = `
-                        <div class="event-header">
-                            <span class="event-type">${event.event_type}</span>
-                            <span class="event-time">${date}</span>
-                            <button onclick="dismissEvent(${event.id})" style="background: none; border: 1px solid #30363d; color: #8b949e; padding: 2px 6px; font-size: 10px; margin-left: auto;">Done</button>
-                        </div>
-                        <div class="repo-name">Repo: ${event.repo_name}</div>
-                        <div style="font-weight: bold; margin-bottom: 10px;">${event.details.action || 'Unknown Action'}</div>
-                        <details>
-                            <summary style="cursor: pointer; color: #8b949e; font-size: 12px;">View Payload</summary>
-                            <pre>${details}</pre>
-                        </details>
-                    `;
+
+                    // Special rendering for 'agent_step'
+                    if (event.event_type === 'agent_step') {
+                        const icon = event.details.icon || "ℹ️";
+                        const message = event.details.message || "Working...";
+
+                        let extraHtml = "";
+                        if (event.details.files) {
+                            extraHtml += `<div style="margin-top:5px; font-size:12px; color:#8b949e">Files: ${event.details.files.map(f => `<code style="background:#21262d; padding:2px 4px; border-radius:4px;">${f}</code>`).join(", ")}</div>`;
+                        }
+                        if (event.details.pr_url) {
+                            extraHtml += `<div style="margin-top:5px;"><a href="${event.details.pr_url}" target="_blank" style="color:#58a6ff; text-decoration:none;">🔗 View Pull Request</a></div>`;
+                        }
+
+                        card.innerHTML = `
+                            <div class="event-header">
+                                <span class="event-type">STEP</span>
+                                <span class="event-time">${date}</span>
+                            </div>
+                            <div style="display: flex; align-items: flex-start; gap: 10px;">
+                                <div style="font-size: 24px;">${icon}</div>
+                                <div style="flex-grow: 1;">
+                                    <div style="font-weight: bold; font-size: 15px;">${message}</div>
+                                    ${extraHtml}
+                                </div>
+                            </div>
+                        `;
+                    }
+                    // Special rendering for 'agent_error'
+                    else if (event.event_type === 'agent_error') {
+                        card.style.borderColor = '#fa7970';
+                        card.innerHTML = `
+                            <div class="event-header">
+                                <span class="event-type" style="color: #fa7970">ERROR</span>
+                                <span class="event-time">${date}</span>
+                            </div>
+                            <div style="color: #fa7970; font-weight: bold;">❌ ${event.details.error}</div>
+                            <div style="margin-top:5px;">${event.details.reason || ''}</div>
+                        `;
+                    }
+                    // Default fallback
+                    else {
+                        const action = event.details.action || event.event_type;
+                        card.innerHTML = `
+                            <div class="event-header">
+                                <span class="event-type">${event.event_type}</span>
+                                <span class="event-time">${date}</span>
+                                <button onclick="dismissEvent(${event.id})" style="background: none; border: 1px solid #30363d; color: #8b949e; padding: 2px 6px; font-size: 10px; margin-left: auto;">Done</button>
+                            </div>
+                            <div class="repo-name">Repo: ${event.repo_name}</div>
+                            <div style="font-weight: bold; margin-bottom: 5px;">${action}</div>
+                            <details>
+                                <summary style="cursor: pointer; color: #8b949e; font-size: 12px;">View JSON</summary>
+                                <pre>${detailsJson}</pre>
+                            </details>
+                        `;
+                    }
                     container.appendChild(card);
                 });
             } catch (e) {

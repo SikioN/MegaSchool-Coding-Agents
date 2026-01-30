@@ -14,6 +14,23 @@ class CodeAgent:
         self.llm = get_llm()
         self.git = git_provider or GitProvider()
 
+    def _log_step(self, message: str, details: dict = None, icon: str = "ℹ️"):
+        """
+        Logs a granular step to the DB for the Dashboard.
+        """
+        try:
+            from src.core.db import log_event
+            repo_name = self.git._get_repo_name_from_remote() or "unknown"
+            
+            payload = {"message": message, "icon": icon}
+            if details:
+                payload.update(details)
+                
+            log_event("agent_step", repo_name, payload)
+            print(f"[{icon}] {message}")
+        except Exception as e:
+            print(f"Log Error: {e}")
+
     def run(self, issue_url: str):
         """
         Запускает процесс выполнения задачи (Initial Flow).
@@ -21,7 +38,10 @@ class CodeAgent:
         self.current_issue_url = issue_url
         print(f"Code Agent запущен для задачи: {issue_url}")
         
+        self._log_step(f"Started working on Issue {issue_url.split('/')[-1]}", icon="🏁")
+        
         # 1. Чтение задачи
+        self._log_step("Fetching Issue content...", icon="📥")
         issue_content = self.git.get_issue(issue_url)
         
         # 1.a Добавляем комментарии (User Refinement)
@@ -29,12 +49,15 @@ class CodeAgent:
         if comments:
             print(f"Найдены комментарии к задаче ({len(comments)} chars). Добавляем в контекст.")
             issue_content += f"\n\nUPDATES (Comments):\n{comments}"
+            self._log_step("Attached user comments to context", icon="🗣️")
             
         print("Содержимое задачи получено (с учетом комментариев).")
         
         # 1.1 ВАЛИДАЦИЯ ЗАДАЧИ
+        self._log_step("Validating Issue description...", icon="🛡")
         is_valid, reason = self._validate_issue(issue_content)
         if not is_valid:
+            self._log_step(f"Task Rejected: {reason}", icon="❌")
             print(f"❌ Задача отклонена: {reason}")
             rejection_comment = (
                 f"❌ **Task Rejected**\n\n"
@@ -52,8 +75,11 @@ class CodeAgent:
             repo_name = self.git._get_repo_name_from_remote() or "unknown"
             log_event("agent_error", repo_name, {"error": "Validation Failed", "reason": reason})
             return
+            
+        self._log_step("Validation Passed. Starting pipeline.", icon="✅")
 
         # 2. Сбор контекста
+        self._log_step("Analyzing repository context...", icon="🔍")
         context = self._get_context()
         
         # 3. Генерация плана и кода
@@ -70,6 +96,7 @@ class CodeAgent:
 Верни ПОЛНОЕ содержимое модифицированных файлов.
 """
         print("Запрос к LLM...")
+        self._log_step("Thinking... (Querying LLM)", icon="🧠")
         response = self.llm.generate(system_prompt, user_prompt)
         
         # 4. Обработка ответа и создание PR
@@ -102,6 +129,7 @@ class CodeAgent:
         Запускает цикл исправления на основе ревью.
         """
         print(f"Code Agent запущен в режиме FIX для PR: {pr_url}")
+        self._log_step(f"Starting Fix Loop for PR {pr_url.split('/')[-1]}", icon="🔧", details={"pr_url": pr_url})
         
         # 1. Проверка лимита итераций
         comments = self.git.get_pr_comments(pr_url)
@@ -109,13 +137,16 @@ class CodeAgent:
         
         if request_changes_count >= Config.MAX_ITERATIONS:
              print(f"CRITICAL: Достигнут лимит итераций ({Config.MAX_ITERATIONS}). Остановка.")
+             self._log_step("Max iterations reached. Stopping.", icon="🛑")
              self.git.post_comment(pr_url, f"❌ Code Agent остановил работу: превышен лимит итераций ({Config.MAX_ITERATIONS}). Требуется вмешательство человека.")
              return
 
         # 2. Checkout ветки PR
+        self._log_step("Checking out PR branch...", icon="🌿")
         self.git.checkout_pr(pr_url)
         
         # 3. Сбор информации
+        self._log_step("Reading PR comments and diff...", icon="📖")
         issue_content = self.git.get_issue(issue_url)
         pr_comments = self.git.get_pr_comments(pr_url)
         pr_diff = self.git.get_pr_diff(pr_url)
@@ -143,6 +174,8 @@ class CodeAgent:
 Верни ПОЛНОЕ содержимое исправленных файлов.
 """
         print("Запрос к LLM для исправлений...")
+        self._log_step("Analyzing Reviewer feedback...", icon="🧐")
+        self._log_step("Thinking... (Generating Fix)", icon="🧠")
         response = self.llm.generate(system_prompt, user_prompt)
         
         # 4. Применение и пуш
@@ -159,6 +192,7 @@ class CodeAgent:
         
         if not changes:
             print("LLM не сгенерировала изменений.")
+            self._log_step("LLM did not return any code changes.", icon="⚠️")
             log_event("agent_error", repo_name, {"error": "LLM returned no code changes", "issue": issue_url})
             return
 
@@ -167,6 +201,11 @@ class CodeAgent:
             timestamp = int(time.time())
             branch_name = f"fix/issue-{timestamp}"
             self.git.create_branch(branch_name)
+            self._log_step(f"Created branch `{branch_name}`", icon="🌿")
+        
+        # LOGGING FILE CHANGES
+        file_list = [c['file'] for c in changes]
+        self._log_step(f"Applying changes to {len(file_list)} files: {', '.join(file_list)}", icon="📝")
         
         apply_file_changes(changes)
         
@@ -178,8 +217,10 @@ class CodeAgent:
             # Коммит
             self.git.commit_changes(title)
             # Просто пуш
+            self._log_step("Pushing fix to remote...", icon="📤")
             self.git.create_pr("Update", "Fixes", "main") # create_pr делает push
             print(f"Изменения отправлены в PR.")
+            self._log_step("Fix pushed to PR successfully", icon="✅")
             log_event("agent_action", repo_name, {"action": "changes_pushed", "pr": issue_url}) # issue_url here is PR url in fix mode
         else:
             # 6. Коммит и создание PR
@@ -187,12 +228,16 @@ class CodeAgent:
             
             issue_number = issue_url.split('/')[-1]
             
+            self._log_step("Creating Pull Request...", icon="🚀")
+            
             pr_url = self.git.create_pr(
                 title=f"Fix: Issue {issue_number}", 
                 body=f"Реализованы изменения на основе описания задачи.\n\nCloses #{issue_number}"
             )
             
             print(f"Code Agent завершил работу. PR создан: {pr_url}")
+            
+            self._log_step(f"Pull Request Created: {pr_url}", icon="🎉", details={"pr_url": pr_url})
             
             # LOG SUCCESS TO DB (For Dashboard)
             log_event("pull_request", repo_name, {
@@ -230,6 +275,7 @@ class CodeAgent:
 
         # 1. Generate Map
         print("Генерация карты репозитория...")
+        self._log_step("Scanning repository structure (Smart Context)...", icon="📡")
         repo_map = RepoMapGenerator.generate_map(".")
         print(f"Карта создана ({len(repo_map)} chars).")
 
@@ -237,6 +283,7 @@ class CodeAgent:
         issue_content = self.git.get_issue(self.current_issue_url) if hasattr(self, 'current_issue_url') else "Task"
         relevant_files = self._select_relevant_files(issue_content, repo_map)
         
+        self._log_step(f"AI Selected {len(relevant_files)} relevant files", icon="🎯", details={"files": relevant_files})
         print(f"LLM выбрала файлы: {relevant_files}")
         
         # 3. Read Files
