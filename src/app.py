@@ -83,11 +83,16 @@ async def handle_webhook(
     elif event_type == "issue_comment" and payload.get("action") == "created":
         comment_body = payload["comment"]["body"]
         print(f"DEBUG: Comment created. Body: {comment_body}")
-        if "/fix" in comment_body:
-             if "pull_request" in payload["issue"]: # PR comments are issue comments too
+        if "/fix" in comment_body or "/retry" in comment_body:
+             if "pull_request" in payload["issue"]: # PR comments -> Fix Agent
                   thread = threading.Thread(target=run_fix_agent, args=(payload,))
                   thread.start()
                   return {"status": "started_fix_agent"}
+             else: # Issue comments -> Code Agent (Refinement)
+                  print("DEBUG: Comment on Issue detected. Restarting Code Agent.")
+                  thread = threading.Thread(target=run_code_agent, args=(payload,))
+                  thread.start()
+                  return {"status": "restarted_code_agent"}
         return {"status": "ignored_comment"}
 
     elif event_type == "installation" and payload.get("action") == "created":

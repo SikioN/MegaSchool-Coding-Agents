@@ -22,7 +22,14 @@ class CodeAgent:
         
         # 1. Чтение задачи
         issue_content = self.git.get_issue(issue_url)
-        print("Содержимое задачи получено.")
+        
+        # 1.a Добавляем комментарии (User Refinement)
+        comments = self.git.get_issue_comments(issue_url)
+        if comments:
+            print(f"Найдены комментарии к задаче ({len(comments)} chars). Добавляем в контекст.")
+            issue_content += f"\n\nUPDATES (Comments):\n{comments}"
+            
+        print("Содержимое задачи получено (с учетом комментариев).")
         
         # 1.1 ВАЛИДАЦИЯ ЗАДАЧИ
         is_valid, reason = self._validate_issue(issue_content)

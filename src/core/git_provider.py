@@ -172,6 +172,24 @@ class GitProvider:
              
         return comments_text
 
+    def get_issue_comments(self, issue_url: str) -> str:
+        """
+        Получает текст комментариев к Issue (исключая комментарии самого бота, если нужно).
+        """
+        if not self.gh:
+             return ""
+             
+        repo_name, number = self._parse_issue_url(issue_url)
+        repo = self.gh.get_repo(repo_name)
+        issue = repo.get_issue(number)
+        
+        comments_text = ""
+        for comment in issue.get_comments():
+            # Skip bot rejections to avoid confusion? Or keep them context?
+            # Keeping them allows LLM to see "I rejected this previously".
+            comments_text += f"Comment by {comment.user.login}:\n{comment.body}\n---\n"
+        return comments_text
+
     def checkout_pr(self, pr_url: str):
         """
         Переключается на ветку Pull Request.
