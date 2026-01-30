@@ -18,6 +18,9 @@ def init_db():
                 timestamp REAL
             )
         ''')
+        c.execute('''
+            CREATE INDEX IF NOT EXISTS idx_timestamp ON events (timestamp)
+        ''')
         conn.commit()
         conn.close()
     except Exception as e:
@@ -75,7 +78,7 @@ def get_recent_events(limit: int = 20, repo_name: str = None) -> List[Dict[str, 
             query += " WHERE repo_name = ?"
             params.append(repo_name)
             
-        query += " ORDER BY id DESC LIMIT ?"
+        query += " ORDER BY timestamp DESC LIMIT ?"
         params.append(limit)
         
         c.execute(query, tuple(params))
