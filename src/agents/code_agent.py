@@ -18,6 +18,7 @@ class CodeAgent:
         """
         Запускает процесс выполнения задачи (Initial Flow).
         """
+        self.current_issue_url = issue_url
         print(f"Code Agent запущен для задачи: {issue_url}")
         
         # 1. Чтение задачи
@@ -219,7 +220,82 @@ class CodeAgent:
 
     def _get_context(self) -> str:
         """
-        Считывает Python файлы, игнорируя мусор.
+        Считывает файлы, используя Smart Context (Repo Map + LLM Selection).
+        """
+        try:
+            from src.core.repo_scanner import RepoMapGenerator
+        except ImportError:
+            print("RepoMapGenerator not found. Falling back to naive scan.")
+            return self._get_context_legacy()
+
+        # 1. Generate Map
+        print("Генерация карты репозитория...")
+        repo_map = RepoMapGenerator.generate_map(".")
+        print(f"Карта создана ({len(repo_map)} chars).")
+
+        # 2. Select Files via LLM
+        issue_content = self.git.get_issue(self.current_issue_url) if hasattr(self, 'current_issue_url') else "Task"
+        relevant_files = self._select_relevant_files(issue_content, repo_map)
+        
+        print(f"LLM выбрала файлы: {relevant_files}")
+        
+        # 3. Read Files
+        context = ""
+        for path in relevant_files:
+            if os.path.exists(path) and os.path.isfile(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    context += f"\nFile: `{path}`\n```\n{content}\n```\n"
+                except Exception as e:
+                    print(f"Failed to read {path}: {e}")
+            else:
+                 # File might be new (to be created), so we just skip reading it
+                 pass
+                 
+        return context
+
+    def _select_relevant_files(self, issue: str, repo_map: str) -> list[str]:
+        """
+        Asks LLM to select relevant files based on the map.
+        """
+        system_prompt = """You are a Principal Software Architect.
+Your task is to identify which files in the repository are relevant to a specific Issue/Task.
+You must return a raw JSON list of file paths.
+
+Example Output:
+["src/main.py", "src/auth/login.py"]
+
+Do not output ANY explanation. Just the JSON list.
+"""
+        user_prompt = f"""
+REPO MAP:
+{repo_map}
+
+TASK:
+{issue}
+
+Which files should I read or modify to solve this task?
+Includes files that need to be modified and files that provide necessary context (definitions, helpers).
+If the task requires creating a new file, do not list it here (as it doesn't exist yet), unless you need to check if it conflicts.
+Return JSON list of paths.
+"""
+        try:
+            response = self.llm.generate(system_prompt, user_prompt)
+            # Cleanup Markdown wrappers
+            clean_json = response.replace("```json", "").replace("```", "").strip()
+            import json
+            files = json.loads(clean_json)
+            if isinstance(files, list):
+                return files
+            return []
+        except Exception as e:
+            print(f"Error selecting files: {e}")
+            return [] # Fallback to empty or legacy?
+
+    def _get_context_legacy(self) -> str:
+        """
+        Legacy: Reads all Python files.
         """
         context = ""
         exclude_dirs = {'.git', '.venv', '__pycache__', 'venv', 'env'}
