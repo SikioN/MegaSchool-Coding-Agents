@@ -65,10 +65,10 @@
 
     ```bash
     # Вариант с файлом .env (рекомендуется)
-    docker run -d -p 8000:8000 --env-file .env --name my-agent megaschool-agent
+    docker run -d -p 8000:8080 --env-file .env --name my-agent megaschool-agent
 
     # ИЛИ передача ключей вручную
-    docker run -d -p 8000:8000 \
+    docker run -d -p 8000:8080 \
       -e GITHUB_APP_ID=... \
       -e GITHUB_WEBHOOK_SECRET=... \
       -e GITHUB_PRIVATE_KEY="..." \
