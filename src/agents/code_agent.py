@@ -24,6 +24,24 @@ class CodeAgent:
         issue_content = self.git.get_issue(issue_url)
         print("Содержимое задачи получено.")
         
+        # 1.1 ВАЛИДАЦИЯ ЗАДАЧИ
+        is_valid, reason = self._validate_issue(issue_content)
+        if not is_valid:
+            print(f"❌ Задача отклонена: {reason}")
+            rejection_comment = (
+                f"❌ **Task Rejected**\n\n"
+                f"I cannot process this request because the description is insufficient.\n"
+                f"**Reason**: {reason}\n\n"
+                f"Please update the issue with clear requirements, file names, and acceptance criteria."
+            )
+            self.git.post_comment(issue_url, rejection_comment)
+            
+            # Log failure to DB
+            from src.core.db import log_event
+            repo_name = self.git._get_repo_name_from_remote() or "unknown"
+            log_event("agent_error", repo_name, {"error": "Validation Failed", "reason": reason})
+            return
+
         # 2. Сбор контекста
         context = self._get_context()
         
@@ -45,6 +63,28 @@ class CodeAgent:
         
         # 4. Обработка ответа и создание PR
         self._apply_and_push(response, f"Решение задачи {issue_url.split('/')[-1]}", issue_url)
+
+    def _validate_issue(self, content: str) -> tuple[bool, str]:
+        """
+        Проверяет качество описания задачи.
+        Возвращает (Passed, Reason).
+        """
+        # Попытка извлечь чистое тело задачи (убираем Title: ...)
+        body = content
+        if "Description:" in content:
+            body = content.split("Description:", 1)[1].strip()
+        
+        # 1. Heuristic: Length Check
+        if len(body) < 30:
+            return False, "Description is too short (< 30 chars). Please provide more details."
+            
+        # 2. Heuristic: Keyword Check
+        keywords = ["create", "add", "implement", "fix", "update", "refactor", "change", "delete", "remove"]
+        if not any(word in body.lower() for word in keywords):
+            return False, "No actionable keywords found (e.g., 'create', 'fix', 'implement'). What should I do?"
+            
+        return True, "OK"
+
 
     def run_fix(self, pr_url: str, issue_url: str):
         """

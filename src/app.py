@@ -100,6 +100,16 @@ async def handle_webhook(
              thread.start()
         return {"status": "scanning_repos"}
 
+    elif event_type == "installation_repositories" and payload.get("action") == "added":
+        installation_id = payload["installation"]["id"]
+        repositories = payload.get("repositories_added", [])
+        print(f"DEBUG: Repositories added to installation. Count: {len(repositories)}")
+        
+        if repositories:
+             thread = threading.Thread(target=run_auto_setup, args=(installation_id, repositories))
+             thread.start()
+        return {"status": "scanning_added_repos"}
+
     elif event_type == "pull_request" and payload.get("action") in ["opened", "synchronize"]:
         print(f"DEBUG: PR event {payload.get('action')}")
         thread = threading.Thread(target=run_reviewer_agent, args=(payload,))
