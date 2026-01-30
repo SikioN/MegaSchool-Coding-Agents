@@ -152,11 +152,19 @@ class CodeAgent:
             })
             
             # COMMENT ON ISSUE
-            comment_body = (
-                f"🚀 **Task Completed!**\n\n"
-                f"I have created a Pull Request with the solution: {pr_url}\n\n"
-                f"Please review the changes."
-            )
+            if "Error creating PR" in pr_url:
+                 comment_body = (
+                    f"⚠️ **Task Completed but PR Failed**\n\n"
+                    f"I implemented the changes, but could not create a Pull Request.\n"
+                    f"**Error Details:**\n`{pr_url}`\n\n"
+                    f"Please check GitHub App Permissions (Pull Requests: Read & Write)."
+                )
+            else:
+                comment_body = (
+                    f"🚀 **Task Completed!**\n\n"
+                    f"I have created a Pull Request with the solution: {pr_url}\n\n"
+                    f"Please review the changes."
+                )
             self.git.post_comment(issue_url, comment_body)
 
     def _get_context(self) -> str:

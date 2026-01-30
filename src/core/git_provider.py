@@ -97,7 +97,7 @@ class GitProvider:
                 return pr.html_url
             except Exception as e:
                 print(f"Error creating PR: {e}")
-                return "Error creating PR"
+                return f"Error creating PR: {str(e)}"
             
         return "Could not determine repo name for PR creation"
 
