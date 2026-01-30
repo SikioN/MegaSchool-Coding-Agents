@@ -5,7 +5,7 @@ set -e
 SERVICE_NAME="megaschool-agent"
 # --- ВВЕДИТЕ ID ВАШЕГО РЕЕСТРА НИЖЕ ---
 # Пример: REGISTRY_ID="crp1234567890abcdef"
-REGISTRY_ID="" 
+REGISTRY_ID="crpc4h1md9d242gbkd12" 
 
 if [ -z "$REGISTRY_ID" ]; then
   echo "❌ Error: Please open deploy_yandex.sh and set REGISTRY_ID!"
@@ -22,20 +22,45 @@ echo "🔨 Building Docker image (linux/amd64)..."
 docker build --platform linux/amd64 -t $IMAGE_URI .
 
 # 2. Push to Registry
+echo "🔐 Logging in to Yandex Registry (isolated environment)..."
+export DOCKER_CONFIG=$(mktemp -d)
+echo $(yc iam create-token) | docker login --username iam --password-stdin cr.yandex
+
 echo "📤 Pushing to Yandex Container Registry..."
 docker push $IMAGE_URI
 
 # 3. Deploy Container
 echo "☁️  Updating Serverless Container..."
 
+# Create Service Account if missing
+if ! yc iam service-account get agent-sa > /dev/null 2>&1; then
+  echo "👤 Creating Service Account 'agent-sa'..."
+  yc iam service-account create --name agent-sa
+fi
+SA_ID=$(yc iam service-account get agent-sa --format json | jq -r .id)
+
+# Grant 'container-registry.images.puller' role to SA
+echo "👮 Granting puller role to Service Account..."
+FOLDER_ID=$(yc config get folder-id)
+yc resource-manager folder add-access-binding --id $FOLDER_ID --role container-registry.images.puller --subject serviceAccount:$SA_ID > /dev/null
+
+# Check if container exists, create if not
+if ! yc serverless container get $SERVICE_NAME > /dev/null 2>&1; then
+  echo "🆕 Creating Serverless Container '$SERVICE_NAME'..."
+  yc serverless container create --name $SERVICE_NAME
+fi
+
 # Load env vars for secrets
 if [ -f .env ]; then
-  export $(grep -v '^#' .env | xargs)
+  echo "🔑 Loading secrets from .env..."
+  set -a
+  source .env
+  set +a
 else
   echo "⚠️  .env file not found! Secrets might be missing."
 fi
 
-# We use the env vars from current shell (exported above)
+# Deploy
 yc serverless container revision deploy \
   --container-name $SERVICE_NAME \
   --image $IMAGE_URI \
@@ -43,7 +68,7 @@ yc serverless container revision deploy \
   --memory 512M \
   --concurrency 1 \
   --execution-timeout 30s \
-  --service-account-id $(yc iam service-account get agent-sa --format json | jq -r .id || echo "") \
+  --service-account-id $SA_ID \
   --environment GITHUB_APP_ID="$GITHUB_APP_ID",GITHUB_WEBHOOK_SECRET="$GITHUB_WEBHOOK_SECRET",GITHUB_PRIVATE_KEY="$GITHUB_PRIVATE_KEY",LLM_API_KEY="$LLM_API_KEY",YC_FOLDER_ID="$YC_FOLDER_ID"
 
 echo "✅ Deployment Complete!"
