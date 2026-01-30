@@ -10,6 +10,8 @@ from src.core.config import Config
 from src.core.github_app_auth import GitHubAppAuth
 from src.core.webhook_handler import WebhookVerificator
 from src.core.db import init_db, log_event, get_recent_events
+from src.core.auto_setup import run_auto_setup
+from src.core.runner import run_code_agent_task, run_fix_agent_task, run_reviewer_agent_task
 
 app = FastAPI(title="MegaSchool Coding Agent")
 templates = Jinja2Templates(directory="src/templates")
@@ -75,6 +77,15 @@ async def handle_webhook(
                   background_tasks.add_task(run_fix_agent, payload)
         return {"status": "processing_comment"}
 
+    elif event_type == "installation" and payload.get("action") == "created":
+        # Handle new installation -> Scan Repos
+        installation_id = payload["installation"]["id"]
+        repositories = payload.get("repositories", [])
+        
+        if repositories:
+             background_tasks.add_task(run_auto_setup, installation_id, repositories)
+        return {"status": "scanning_repos"}
+
     elif event_type == "pull_request" and payload.get("action") in ["opened", "synchronize"]:
         background_tasks.add_task(run_reviewer_agent, payload)
         return {"status": "processing_pr"}
@@ -82,87 +93,27 @@ async def handle_webhook(
     return {"status": "ignored"}
 
 # ---------------------------------------------------------------------
-# Agent Runners (Subprocess wrappers)
+# Agent Runners (Payload Wrappers)
 # ---------------------------------------------------------------------
-
-def _get_env_with_token(installation_id: int) -> dict:
-    """Generates env vars with Installation Token for the subprocess."""
-    token = GitHubAppAuth.get_installation_token(installation_id)
-    
-    env = os.environ.copy()
-    env["GITHUB_TOKEN"] = token
-    # Ensure other secrets are passed
-    env["LLM_API_KEY"] = Config.OPENAI_API_KEY or ""
-    env["YC_FOLDER_ID"] = Config.YC_FOLDER_ID or ""
-    env["LLM_BASE_URL"] = Config.LLM_BASE_URL or ""
-    env["LLM_MODEL"] = Config.LLM_MODEL or ""
-    return env
-
-def _run_in_temp_repo(repo_full_name: str, env: dict, command: list):
-    """Clones repo and runs command in temp dir."""
-    token = env["GITHUB_TOKEN"]
-    # Clone URL with token
-    clone_url = f"https://x-access-token:{token}@github.com/{repo_full_name}.git"
-    
-    with tempfile.TemporaryDirectory() as temp_dir:
-        print(f"Cloning {repo_full_name} to {temp_dir}...")
-        try:
-            subprocess.run(["git", "clone", clone_url, temp_dir], check=True, capture_output=True)
-            # Configure user for commits
-            subprocess.run(["git", "config", "user.email", "agent@megaschool.ai"], cwd=temp_dir, check=True)
-            subprocess.run(["git", "config", "user.name", "MegaSchool Agent"], cwd=temp_dir, check=True)
-        except subprocess.CalledProcessError as e:
-            print(f"Failed to clone: {e.stderr}")
-            return
-
-        print(f"Running command: {' '.join(command)}")
-        try:
-            import sys
-            full_command = [sys.executable, "-m"] + command[2:] 
-            
-            result = subprocess.run(
-                full_command, 
-                cwd=temp_dir, 
-                env=env,
-                capture_output=True,
-                text=True
-            )
-            print(f"Agent Output:\n{result.stdout}")
-            if result.stderr:
-                print(f"Agent Error:\n{result.stderr}")
-                
-        except Exception as e:
-            print(f"Error running agent: {e}")
-
 
 def run_code_agent(payload: dict):
     installation_id = payload["installation"]["id"]
     repo_name = payload["repository"]["full_name"]
     issue_url = payload["issue"]["html_url"]
-    
-    env = _get_env_with_token(installation_id)
-    command = ["python", "-m", "src.main", "code", "--issue", issue_url]
-    _run_in_temp_repo(repo_name, env, command)
+    run_code_agent_task(installation_id, repo_name, issue_url)
 
 def run_fix_agent(payload: dict):
     installation_id = payload["installation"]["id"]
     repo_name = payload["repository"]["full_name"]
     pr_url = payload["issue"]["pull_request"]["html_url"]
     issue_url = payload["issue"]["html_url"]
-    
-    env = _get_env_with_token(installation_id)
-    command = ["python", "-m", "src.main", "fix", "--pr", pr_url, "--issue", issue_url]
-    _run_in_temp_repo(repo_name, env, command)
+    run_fix_agent_task(installation_id, repo_name, pr_url, issue_url)
 
 def run_reviewer_agent(payload: dict):
     installation_id = payload["installation"]["id"]
     repo_name = payload["repository"]["full_name"]
     pr_url = payload["pull_request"]["html_url"]
-    issue_url = pr_url 
-    
-    env = _get_env_with_token(installation_id)
-    command = ["python", "-m", "src.main", "review", "--pr", pr_url, "--issue", issue_url]
-    _run_in_temp_repo(repo_name, env, command)
+    run_reviewer_agent_task(installation_id, repo_name, pr_url)
 
 if __name__ == "__main__":
     import uvicorn
