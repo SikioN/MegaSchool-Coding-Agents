@@ -44,6 +44,21 @@ echo "👮 Granting puller role to Service Account..."
 FOLDER_ID=$(yc config get folder-id)
 yc resource-manager folder add-access-binding --id $FOLDER_ID --role container-registry.images.puller --subject serviceAccount:$SA_ID > /dev/null
 
+# 3.1 Setup Object Storage (S3) for Logs
+BUCKET_NAME="megaschool-logs-$(echo $REGISTRY_ID | cut -c1-6)" # Unique-ish bucket
+echo "📦 Setting up S3 Bucket: $BUCKET_NAME..."
+
+if ! yc storage bucket get $BUCKET_NAME > /dev/null 2>&1; then
+  echo "🆕 Creating Bucket..."
+  yc storage bucket create --name $BUCKET_NAME
+else
+  echo "✅ Bucket exists."
+fi
+
+# 3.2 Grant Storage Role to SA
+echo "👮 Granting storage.editor role to Service Account..."
+yc resource-manager folder add-access-binding --id $FOLDER_ID --role storage.editor --subject serviceAccount:$SA_ID > /dev/null
+
 # Make container public (allow unauthenticated invoke)
 echo "🌍 Making container public..."
 if ! yc serverless container list-access-bindings --name $SERVICE_NAME | grep -q "system:allUsers"; then
@@ -75,7 +90,7 @@ yc serverless container revision deploy \
   --concurrency 1 \
   --execution-timeout 30s \
   --service-account-id $SA_ID \
-  --environment GITHUB_APP_ID="$GITHUB_APP_ID",GITHUB_WEBHOOK_SECRET="$GITHUB_WEBHOOK_SECRET",GITHUB_PRIVATE_KEY="$GITHUB_PRIVATE_KEY",LLM_API_KEY="$LLM_API_KEY",YC_FOLDER_ID="$YC_FOLDER_ID",DASHBOARD_API_URL="$DASHBOARD_API_URL"
+  --environment GITHUB_APP_ID="$GITHUB_APP_ID",GITHUB_WEBHOOK_SECRET="$GITHUB_WEBHOOK_SECRET",GITHUB_PRIVATE_KEY="$GITHUB_PRIVATE_KEY",LLM_API_KEY="$LLM_API_KEY",YC_FOLDER_ID="$YC_FOLDER_ID",DASHBOARD_API_URL="$DASHBOARD_API_URL",S3_BUCKET_NAME="$BUCKET_NAME"
 
 echo "✅ Deployment Complete!"
 echo "   Go to Yandex Console -> Serverless Containers to get your new URL."
