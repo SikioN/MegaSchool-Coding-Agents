@@ -29,8 +29,8 @@ async def read_dashboard(request: Request):
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
 @app.get("/api/events")
-async def read_events():
-    return get_recent_events()
+async def read_events(repo: str = None):
+    return get_recent_events(repo_name=repo)
 
 # ---------------------------------------------------------------------
 # Webhook Handler
