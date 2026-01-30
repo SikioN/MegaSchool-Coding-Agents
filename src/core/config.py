@@ -19,6 +19,11 @@ class Config:
     # Ограничения
     MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "5"))
 
+    # GitHub App Config
+    GITHUB_APP_ID = os.getenv("GITHUB_APP_ID")
+    GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET")
+    GITHUB_PRIVATE_KEY = os.getenv("GITHUB_PRIVATE_KEY")
+
     @classmethod
     def validate(cls):
         """

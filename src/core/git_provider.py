@@ -10,12 +10,15 @@ class GitProvider:
     Провайдер для работы с Git репозиторием и GitHub API.
     Обеспечивает управление ветками, коммитами и Pull Request.
     """
-    def __init__(self, repo_path: str = "."):
+    def __init__(self, repo_path: str = ".", token: Optional[str] = None):
         self.repo_path = repo_path
         self.repo = git.Repo(repo_path)
         
-        if Config.GITHUB_TOKEN:
-            auth = Auth.Token(Config.GITHUB_TOKEN)
+        # Use provided token OR fallback to Config token
+        api_token = token or Config.GITHUB_TOKEN
+        
+        if api_token:
+            auth = Auth.Token(api_token)
             self.gh = Github(auth=auth)
         else:
             self.gh = None

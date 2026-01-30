@@ -10,9 +10,9 @@ class CodeAgent:
     Агент-разработчик.
     Отвечает за анализ задач, генерацию кода и создание Pull Requests.
     """
-    def __init__(self):
+    def __init__(self, git_provider: GitProvider | None = None):
         self.llm = get_llm()
-        self.git = GitProvider()
+        self.git = git_provider or GitProvider()
 
     def run(self, issue_url: str):
         """

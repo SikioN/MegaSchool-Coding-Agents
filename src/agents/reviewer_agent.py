@@ -6,9 +6,9 @@ class ReviewerAgent:
     Агент-ревьюер.
     Отвечает за анализ Pull Requests и предоставление обратной связи.
     """
-    def __init__(self):
+    def __init__(self, git_provider: GitProvider | None = None):
         self.llm = get_llm()
-        self.git = GitProvider()
+        self.git = git_provider or GitProvider()
 
     def run(self, pr_url: str, issue_url: str):
         """
