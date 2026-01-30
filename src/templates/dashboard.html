@@ -132,16 +132,15 @@
     <div class="container">
         <header>
             <div>
-                <h1>🤖 MegaSchool Agents</h1>
+                <h1>MegaSchool Agents</h1>
                 <div style="font-size: 14px; color: #8b949e;">Real-time Activity Monitor</div>
             </div>
             <div>
-                <span class="status-badge">● Online</span>
+                <span class="status-badge">Online</span>
             </div>
         </header>
 
         <div class="repo-selector">
-            <span style="font-size: 20px;">🔌</span>
             <input type="text" id="repoInput" placeholder="username/repository (e.g. SikioN/MyRepo)">
             <button onclick="connectRepo()">Connect</button>
         </div>
@@ -153,6 +152,7 @@
 
     <script>
         let currentRepo = localStorage.getItem('agent_repo_name') || "";
+        let dismissedEvents = JSON.parse(localStorage.getItem('dismissed_events') || "[]");
 
         function init() {
             if (currentRepo) {
@@ -167,9 +167,8 @@
             const container = document.getElementById('events-list');
             container.innerHTML = `
                 <div class="warning-box">
-                    <h3>⚠️ No Repository Connected</h3>
+                    <h3>No Repository Connected</h3>
                     <p>Enter your repository name above to see events.</p>
-                    <p style="font-size: 12px;">Make sure the GitHub App is installed on your repository!</p>
                 </div>
             `;
         }
@@ -183,6 +182,12 @@
             }
         }
 
+        function dismissEvent(id) {
+            dismissedEvents.push(id);
+            localStorage.setItem('dismissed_events', JSON.stringify(dismissedEvents));
+            loadEvents(); // Re-render
+        }
+
         async function loadEvents() {
             if (!currentRepo) return;
 
@@ -192,7 +197,10 @@
 
                 const container = document.getElementById('events-list');
 
-                if (events.length === 0) {
+                // Filter dismissed
+                const activeEvents = events.filter(e => !dismissedEvents.includes(e.id));
+
+                if (activeEvents.length === 0) {
                     container.innerHTML = `
                         <div class="warning-box">
                             <h3>Waiting for Events...</h3>
@@ -204,7 +212,7 @@
                 }
 
                 container.innerHTML = '';
-                events.forEach(event => {
+                activeEvents.forEach(event => {
                     const date = new Date(event.timestamp * 1000).toLocaleString();
                     const details = JSON.stringify(event.details, null, 2);
 
@@ -214,8 +222,9 @@
                         <div class="event-header">
                             <span class="event-type">${event.event_type}</span>
                             <span class="event-time">${date}</span>
+                            <button onclick="dismissEvent(${event.id})" style="background: none; border: 1px solid #30363d; color: #8b949e; padding: 2px 6px; font-size: 10px; margin-left: auto;">Done</button>
                         </div>
-                        <div class="repo-name">📂 ${event.repo_name}</div>
+                        <div class="repo-name">Repo: ${event.repo_name}</div>
                         <div style="font-weight: bold; margin-bottom: 10px;">${event.details.action || 'Unknown Action'}</div>
                         <details>
                             <summary style="cursor: pointer; color: #8b949e; font-size: 12px;">View Payload</summary>
